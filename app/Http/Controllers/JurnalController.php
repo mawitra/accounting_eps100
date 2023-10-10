@@ -43,25 +43,26 @@ class JurnalController extends Controller
     $transactionDate = $request->input('transaction_date');
 
     // Hitung total "hitung" dari tabel "kalkulasi" berdasarkan "account_code" dan "financial_type" yang sesuai.
+    $existingRecord = DB::table('jurnal')
+    ->where('comp_id', $compId)
+    ->first();
+
+if ($existingRecord) {
     $totalCalculation = DB::table('kalkulasi')
-        ->where('account_code', $accountCode)
-        ->where('financial_type', $financialType)
+        ->where('jurnal_id', $existingRecord->jurnal_id) // Ubah pemilihan dengan menggunakan jurnal_id yang sudah ada
         ->sum('hitung');
 
-    // Hitung jumlah total "amount" dari tabel "jurnal" yang sesuai dengan "account_code" dan "financial_type".
-    $totalAmount = DB::table('jurnal')
-        ->where('account_code', $accountCode)
-        ->where('financial_type', $financialType)
-        ->sum('amount');
-
-    // Sesuaikan perhitungan "amount" berdasarkan tipe akun (debit atau kredit).
-    if ($financialType === 'debit') {
+    if ($existingRecord->financial_type === 'debit') {
         $calculationAmount = $amount + $totalCalculation;
-    } elseif ($financialType === 'kredit') {
+    } elseif ($existingRecord->financial_type === 'kredit') {
         $calculationAmount = $amount - $totalCalculation;
     } else {
-        $calculationAmount = $amount; // Logika lainnya (jika ada)
+        $calculationAmount = $amount;
     }
+} else {
+    // Jika 'comp_id' adalah yang baru, maka tidak ada perhitungan yang perlu dilakukan
+    $calculationAmount = $amount;
+}
 
     // Check if a record with the same 'comp_id' already exists with a different 'amount'
     $existingRecord = DB::table('jurnal')
@@ -98,12 +99,7 @@ class JurnalController extends Controller
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ", [$jurnalId, $compId, $accountCode, $financialType, $amount, $transactionDate, $calculationAmount, $time, $time]);
 
-        // Update field 'amount' pada semua entri yang relevan dalam tabel 'jurnal'
-        DB::table('jurnal')
-            ->where('account_code', $accountCode)
-            ->where('financial_type', $financialType)
-            ->update(['amount' => $totalAmount + $amount]);
-
+      
         // Commit transaksi jika berhasil
         DB::commit();
 

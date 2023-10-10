@@ -19,7 +19,7 @@ class CreateKalkulasiTable extends Migration
             $table->string('comp_id'); // Use UUID for comp_id and make it unique
             $table->string('account_code');
             $table->string('financial_type');
-            $table->float('amount');
+            $table->integer('amount');
             $table->date('transaction_date');
             $table->integer('hitung');
             $table->timestamps();

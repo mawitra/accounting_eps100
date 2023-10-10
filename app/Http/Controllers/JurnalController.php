@@ -60,18 +60,6 @@ class JurnalController extends Controller
     // Inisialisasi jumlah perhitungan
     $calculationAmount = $amount;
 
-     $existingRecord = DB::table('jurnal')
-        ->where('comp_id', $compId)
-        ->where('amount', '<>', $amount)
-        ->first();
-
-    if ($existingRecord) {
-        return response()->json([
-            'status_code' => 400,
-            'message' => 'Amount harus sama !!',
-        ]);
-    }
-
     if ($existingRecord) {
         // Jika 'comp_id' sudah ada, update perhitungan 'hitung'
         $totalCalculation = DB::table('kalkulasi')
@@ -83,25 +71,10 @@ class JurnalController extends Controller
         } elseif ($existingRecord->financial_type === 'kredit') {
             $calculationAmount = $amount - $totalCalculation;
         }
-        
-        // Update data di tabel 'jurnal' dan 'kalkulasi'
-        DB::table('jurnal')
-            ->where('comp_id', $compId)
-            ->update([
-                'account_code' => $accountCode,
-                'financial_type' => $financialType,
-                'amount' => $amount,
-                'transaction_date' => $transactionDate,
-                'updated_at' => Carbon::now(),
-            ]);
 
         DB::table('kalkulasi')
             ->where('jurnal_id', $existingRecord->jurnal_id)
             ->update([
-                'account_code' => $accountCode,
-                'financial_type' => $financialType,
-                'amount' => $amount,
-                'transaction_date' => $transactionDate,
                 'hitung' => $calculationAmount,
                 'updated_at' => Carbon::now(),
             ]);
@@ -201,6 +174,12 @@ class JurnalController extends Controller
 //         ->where('account_code', $accountCode)
 //         ->where('financial_type', $financialType)
 //         ->sum('hitung');
+
+//     // Hitung jumlah total "amount" dari tabel "jurnal" yang sesuai dengan "account_code" dan "financial_type".
+//     $totalAmount = DB::table('jurnal')
+//         ->where('account_code', $accountCode)
+//         ->where('financial_type', $financialType)
+//         ->sum('amount');
 
 //     // Sesuaikan perhitungan "amount" berdasarkan tipe akun (debit atau kredit).
 //     if ($financialType === 'debit') {

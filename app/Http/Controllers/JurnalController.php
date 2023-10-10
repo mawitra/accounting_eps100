@@ -26,7 +26,7 @@ class JurnalController extends Controller
 
     
     public function store(Request $request)
-    {
+{
     $this->validate($request, [
         'comp_id' => 'required',
         'account_code' => 'required',
@@ -42,72 +42,63 @@ class JurnalController extends Controller
     $amount = $request->input('amount');
     $transactionDate = $request->input('transaction_date');
 
-    // Hitung total "hitung" dari tabel "kalkulasi" berdasarkan "account_code" dan "financial_type" yang sesuai.
-    $existingRecord = DB::table('jurnal')
-    ->where('comp_id', $compId)
-    ->first();
+    // Ambil account_code dari tabel detail_akun menggunakan SQL mentah
+    $accountCode = DB::selectOne("SELECT account_code FROM detail_akun WHERE account_code = ?", [$accountCode]);
 
-if ($existingRecord) {
-    $totalCalculation = DB::table('kalkulasi')
-        ->where('jurnal_id', $existingRecord->jurnal_id) // Ubah pemilihan dengan menggunakan jurnal_id yang sudah ada
-        ->sum('hitung');
-
-    if ($existingRecord->financial_type === 'debit') {
-        $calculationAmount = $amount + $totalCalculation;
-    } elseif ($existingRecord->financial_type === 'kredit') {
-        $calculationAmount = $amount - $totalCalculation;
-    } else {
-        $calculationAmount = $amount;
-    }
-} else {
-    // Jika 'comp_id' adalah yang baru, maka tidak ada perhitungan yang perlu dilakukan
-    $calculationAmount = $amount;
-}
-
-    // Check if a record with the same 'comp_id' already exists with a different 'amount'
-    $existingRecord = DB::table('jurnal')
-        ->where('comp_id', $compId)
-        ->where('amount', '<>', $amount)
-        ->first();
-
-    if ($existingRecord) {
-        // If a record with the same 'comp_id' and different 'amount' exists, return a validation error
+    if (!$accountCode) {
         return response()->json([
-            'status_code' => 400, // 400 Bad Request status code
-            'message' => 'ammount harus sama !!',
+            'status_code' => 404,
+            'message' => 'Data detail akun tidak ditemukan.',
         ]);
     }
 
-    // Generate UUID untuk jurnal_id
-    $jurnalId = Uuid::uuid4()->toString();
+    $accountCode = $accountCode->account_code;
 
-    $time = Carbon::now();
+    // Cek apakah sudah ada data dengan 'comp_id' yang sama
+    $existingRecord = DB::table('jurnal')->where('comp_id', $compId)->first();
 
-    // Mulai transaksi database
-    DB::beginTransaction();
+    // Inisialisasi jumlah perhitungan
+    $calculationAmount = $amount;
 
-    try {
-        // Gunakan pernyataan SQL mentah untuk memasukkan data ke tabel 'jurnal'
-        DB::statement("
-            INSERT INTO jurnal (jurnal_id, comp_id, account_code, financial_type, amount, transaction_date, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ", [$jurnalId, $compId, $accountCode, $financialType, $amount, $transactionDate, $time, $time]);
+    if ($existingRecord) {
+        // Jika 'comp_id' sudah ada, update perhitungan 'hitung'
+        $totalCalculation = DB::table('kalkulasi')
+            ->where('jurnal_id', $existingRecord->jurnal_id)
+            ->sum('hitung');
 
-        // Gunakan pernyataan SQL mentah untuk memasukkan data ke tabel 'kalkulasi'
-        DB::statement("
-            INSERT INTO kalkulasi (jurnal_id, comp_id, account_code, financial_type, amount, transaction_date, hitung, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ", [$jurnalId, $compId, $accountCode, $financialType, $amount, $transactionDate, $calculationAmount, $time, $time]);
+        if ($existingRecord->financial_type === 'debit') {
+            $calculationAmount = $amount + $totalCalculation;
+        } elseif ($existingRecord->financial_type === 'kredit') {
+            $calculationAmount = $amount - $totalCalculation;
+        }
+        
+        // Update data di tabel 'jurnal' dan 'kalkulasi'
+        DB::table('jurnal')
+            ->where('comp_id', $compId)
+            ->update([
+                'account_code' => $accountCode,
+                'financial_type' => $financialType,
+                'amount' => $amount,
+                'transaction_date' => $transactionDate,
+                'updated_at' => Carbon::now(),
+            ]);
 
-      
-        // Commit transaksi jika berhasil
-        DB::commit();
+        DB::table('kalkulasi')
+            ->where('jurnal_id', $existingRecord->jurnal_id)
+            ->update([
+                'account_code' => $accountCode,
+                'financial_type' => $financialType,
+                'amount' => $amount,
+                'transaction_date' => $transactionDate,
+                'hitung' => $calculationAmount,
+                'updated_at' => Carbon::now(),
+            ]);
 
         return response()->json([
-            'status_code' => 201,
-            'message' => 'Data Berhasil di tambahkan!!',
+            'status_code' => 200,
+            'message' => 'Data berhasil diperbarui!',
             'data' => [
-                'jurnal_id' => $jurnalId,
+                'jurnal_id' => $existingRecord->jurnal_id,
                 'comp_id' => $compId,
                 'account_code' => $accountCode,
                 'financial_type' => $financialType,
@@ -115,15 +106,49 @@ if ($existingRecord) {
                 'transaction_date' => $transactionDate,
             ],
         ]);
-    } catch (\Exception $e) {
-        // Rollback transaksi jika terjadi kesalahan
-        DB::rollBack();
+    } else {
+        $jurnalId = Uuid::uuid4()->toString();
+        $time = Carbon::now();
 
-        return response()->json([
-            'status_code' => 500, // 500 Internal Server Error status code
-            'message' => 'Failed to create data',
-            'error' => $e->getMessage(),
-        ]);
+        DB::beginTransaction();
+
+        try {
+            // Gunakan SQL mentah untuk memasukkan data ke tabel 'jurnal'
+            DB::statement("
+                INSERT INTO jurnal (jurnal_id, comp_id, account_code, financial_type, amount, transaction_date, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ", [$jurnalId, $compId, $accountCode, $financialType, $amount, $transactionDate, $time, $time]);
+
+            // Gunakan SQL mentah untuk memasukkan data ke tabel 'kalkulasi'
+            DB::statement("
+                INSERT INTO kalkulasi (jurnal_id, comp_id, account_code, financial_type, amount, transaction_date, hitung, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ", [$jurnalId, $compId, $accountCode, $financialType, $amount, $transactionDate, $calculationAmount, $time, $time]);
+
+            DB::commit();
+
+            return response()->json([
+                'status_code' => 201,
+                'message' => 'Data Berhasil ditambahkan!!',
+                'data' => [
+                    'jurnal_id' => $jurnalId,
+                    'comp_id' => $compId,
+                    'account_code' => $accountCode,
+                    'financial_type' => $financialType,
+                    'amount' => $amount,
+                    'transaction_date' => $transactionDate,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'status_code' => 500,
+                'message' => 'Gagal menambahkan data',
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }
+
 }

@@ -21,8 +21,17 @@ $router->get('/', function () use ($router) {
 $router->group(['prefix' => 'api'], function () use ($router)
 {
 
-    $router->get('/jurnal', 'JurnalController@index');
-    $router->post('/jurnal/create', 'JurnalController@store');
+   $router->get('/jurnal', 'JurnalController@index');
+   $router->post('/jurnal/create', 'JurnalController@store');
+
+   $router->delete('/detail_akun/{id}', 'DetailAkunController@destroy');
+   $router->put('/detail_akun/{id}', 'DetailAkunController@update');
+   $router->post('/detail_akun', 'DetailAkunController@store');
+   $router->get('/detail_akun', 'DetailAkunController@index');
+
+
+
+
 
 
 });

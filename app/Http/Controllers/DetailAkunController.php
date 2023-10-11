@@ -11,15 +11,15 @@ class DetailAkunController extends Controller
 {
     public function index()
     {
-       
+
         $detail = DB::select("SELECT account_code, account_name, account_type, created_at, updated_at FROM detail_akun");
-    
+
         $responseData = [
-            'status_code'=> 200,
-            'message'=> "succes",
+            'status_code' => 200,
+            'message' => "succes",
             'data' => $detail
         ];
-           
+
         return response()->json($responseData);
     }
 
@@ -60,35 +60,39 @@ class DetailAkunController extends Controller
         }
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, $accountCode)
     {
-        $request->validate([
-            'account_code' => 'required',
+        $this->validate($request, [
             'account_name' => 'required',
             'account_type' => 'required',
         ]);
 
         try {
-            DB::table('detail_akun')
-                ->where('id', $id)
-                ->update([
-                    'account_code' => $request->input('account_code'),
-                    'account_name' => $request->input('account_name'),
-                    'account_type' => $request->input('account_type'),
-                    'updated_at' => Carbon::now(),
+            $affectedRows = DB::update('UPDATE detail_akun SET account_name = ?, account_type = ?, updated_at = ? WHERE account_code = ?', [
+                $request->input('account_name'),
+                $request->input('account_type'),
+                Carbon::now(),
+                $accountCode,
+            ]);
+
+            if ($affectedRows === 1) {
+                $responseData = [
+                    'status_code' => 200, // 200 OK status code
+                    'message' => 'Data Detail Akun berhasil diperbarui.',
+                    'data' => [
+                        'no akun' => $accountCode,
+                        'nama akun' => $request->input('account_name'),
+                        'tipe akun' => $request->input('account_type'),
+                    ],
+                ];
+
+                return response()->json($responseData);
+            } else {
+                return response()->json([
+                    'status_code' => 404, // 404 Not Found status code
+                    'message' => 'Data Detail Akun tidak ditemukan.',
                 ]);
-
-            $responseData = [
-                'status_code' => 200, // 200 OK status code
-                'message' => 'Data Detail Akun berhasil diperbarui.',
-                'data' => [
-                    'account_code' => $request->input('account_code'),
-                    'account_name' => $request->input('account_name'),
-                    'account_type' => $request->input('account_type'),
-                ],
-            ];
-
-            return response()->json($responseData);
+            }
         } catch (\Exception $e) {
             return response()->json([
                 'status_code' => 500, // 500 Internal Server Error status code
@@ -117,5 +121,4 @@ class DetailAkunController extends Controller
             ]);
         }
     }
-
 }
